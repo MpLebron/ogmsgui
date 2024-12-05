@@ -3,59 +3,24 @@ import os
 import ipywidgets as widgets
 from ipyfilechooser import FileChooser
 from IPython.display import display
+from IPython.display import Javascript
 
 # 
 class Model:
     """模型基类,用于处理模型的基本属性和操作"""
     def __init__(self, model_data):
-        self.id = model_data.get("_id")
-        self.name = model_data.get("mdlJson", {}).get("mdl", {}).get("name")
-        self.description = model_data.get("description")
-        self.author = model_data.get("author")
+        mdl_json = model_data.get("mdlJson", {})
+        mdl = mdl_json.get("mdl", {})
+        
+        self.id = model_data.get("_id", "")
+        self.name = mdl.get("name", "未命名模型")
+        self.description = model_data.get("description", "")
+        self.author = model_data.get("author", "")
         self.tags = model_data.get("normalTags", [])
         self.tags_en = model_data.get("normalTagsEn", [])
         
-        # 解析模型的输入输出数据项
-        self.data_items = self._parse_data_items(
-            model_data.get("mdlJson", {}).get("mdl", {}).get("DataItems", [])
-        )
-        
-        # 解析模型状态
-        self.states = self._parse_states(
-            model_data.get("mdlJson", {}).get("mdl", {}).get("states", [])
-        )
-
-    def _parse_data_items(self, data_items):
-        """解析数据项配置"""
-        items_dict = {}
-        for item_group in data_items:
-            for item in item_group:
-                items_dict[item["text"]] = {
-                    "id": item["Id"],
-                    "type": item["dataType"],
-                    "description": item["desc"]
-                }
-        return items_dict
-
-    def _parse_states(self, states):
-        """解析模型状态配置"""
-        states_dict = {}
-        for state in states:
-            events = {}
-            for event in state.get("event", []):
-                events[event["eventName"]] = {
-                    "id": event["eventId"],
-                    "type": event["eventType"],
-                    "description": event["eventDesc"],
-                    "optional": event["optional"]
-                }
-            states_dict[state["name"]] = {
-                "id": state["Id"],
-                "type": state["type"],
-                "description": state["desc"],
-                "events": events
-            }
-        return states_dict
+        # 直接使用原始的states数据
+        self.states = mdl.get("states", [])
 
 class ModelGUI:
     """模型GUI类,负责创建和管理GUI界面"""
@@ -64,7 +29,7 @@ class ModelGUI:
         self.current_model = None  # 当前选中的模型
         self.widgets = {}  # 存储GUI组件
         
-        # 在初始化时直接加载模型配置
+        # 在初始化时直接加载模型���
         self._load_models()
     
     def _load_models(self):
@@ -136,7 +101,7 @@ class ModelGUI:
         self.widgets['model_info'].value = info_html
     
     def _create_param_widgets(self):
-        """创建参数输入组件"""
+        """创建参数入组件"""
         param_widgets = []
         for data_name, data_info in self.current_model.data_items.items():
             if data_info['type'] == 'internal':
@@ -160,54 +125,255 @@ class ModelGUI:
         return self.create_gui()
     
     def show_model(self, model_name):
-        """显示指定模型的GUI界面
-        
-        Args:
-            model_name (str): 模型名称
-            
-        Returns:
-            ipywidget: 模型的GUI界面
-        """
+        """显示指定模型的GUI界面"""
         if model_name not in self.models:
             raise ValueError(f"模型 '{model_name}' 不存在")
             
         self.current_model = self.models[model_name]
         
-        # 创建单个模型的GUI
-        tool_widget = widgets.VBox()
-        children = []
-        
-        # 添加模型信息显示
-        info_html = f"""
-        <h3>{self.current_model.name}</h3>
-        <p><b>描述:</b> {self.current_model.description}</p>
-        <p><b>作者:</b> {self.current_model.author}</p>
-        <p><b>标签:</b> {', '.join(self.current_model.tags)}</p>
+        # 定义CSS样式
+        css = """
+        <style>
+            .model-container {
+                padding: 20px;
+                background: #ffffff;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                margin-bottom: 20px;
+            }
+            
+            .model-title {
+                font-size: 24px;
+                font-weight: bold;
+                margin-bottom: 16px;
+                color: #1a202c;
+            }
+            
+            .info-section {
+                margin-bottom: 16px;
+            }
+            
+            .info-label {
+                font-weight: 500;
+                color: #4a5568;
+            }
+            
+            .info-value {
+                color: #2d3748;
+            }
+            
+            .tag {
+                display: inline-block;
+                padding: 4px 12px;
+                margin: 4px;
+                background: #f3f4f6;
+                color: #4b5563;
+                border-radius: 16px;
+                font-size: 14px;
+            }
+            
+            .state-section {
+                background: #ffffff;
+                border-radius: 8px;
+                padding: 20px;
+                margin-bottom: 20px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }
+            
+            .events-container {
+                margin-top: 16px;
+            }
+            
+            .event-card {
+                margin-bottom: 16px;
+            }
+            
+            .input-group {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin: 8px 0;
+            }
+            
+            .input-field {
+                flex: 1;
+                padding: 8px 12px;
+                border: 1px solid #e2e8f0;
+                border-radius: 4px;
+                background: #f8fafc;
+                font-size: 14px;
+                color: #4a5568;
+            }
+            
+            .select-button {
+                padding: 8px 16px;
+                background: #f1f5f9;
+                color: #4a5568;
+                border: 1px solid #e2e8f0;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+                min-width: 80px;
+                text-align: center;
+            }
+            
+            .select-button:hover {
+                background: #e2e8f0;
+            }
+            
+            .required {
+                background: #ef4444;
+                color: white;
+                padding: 2px 8px;
+                border-radius: 12px;
+                font-size: 12px;
+            }
+            
+            .optional {
+                background: #6b7280;
+                color: white;
+                padding: 2px 8px;
+                border-radius: 12px;
+                font-size: 12px;
+            }
+            
+            .file-chooser-container {
+                margin-top: 8px;
+            }
+            
+            .no-input-message {
+                padding: 16px;
+                background: #f8fafc;
+                border: 1px dashed #e2e8f0;
+                border-radius: 6px;
+                text-align: center;
+                color: #64748b;
+                font-style: italic;
+                margin: 16px 0;
+            }
+        </style>
         """
-        self.widgets['model_info'] = widgets.HTML(value=info_html)
-        children.append(self.widgets['model_info'])
         
-        # 创建参数输入区
-        self.widgets['params_area'] = widgets.VBox()
-        param_widgets = []
-        for data_name, data_info in self.current_model.data_items.items():
-            if data_info['type'] == 'internal':
-                widget = FileChooser(
-                    title=f"{data_name}: {data_info['description']}"
-                )
-                self.widgets[f'param_{data_name}'] = widget
-                param_widgets.append(widget)
-        self.widgets['params_area'].children = param_widgets
-        children.append(self.widgets['params_area'])
+        # 创建一个输出控件来容纳所有内容
+        output_widget = widgets.VBox()
+        widgets_list = []
         
-        # 添加运行按钮
-        self.widgets['run_button'] = widgets.Button(description='运行模型')
-        self.widgets['run_button'].on_click(self._on_run_clicked)
-        children.append(self.widgets['run_button'])
+        # 添加模型信息
+        model_info_html = f"""
+        <div class="model-container">
+            <div class="model-title">{self.current_model.name}</div>
+            
+            <div class="info-section">
+                <p><span class="info-label">Description: </span>
+                   <span class="info-value">{self.current_model.description or 'No description available'}</span></p>
+                <p><span class="info-label">Author: </span>
+                   <span class="info-value">{self.current_model.author or 'Unknown'}</span></p>
+                <div style="margin-top: 12px">
+                    <span class="info-label">Tags: </span>
+                    {' '.join(f'<span class="tag">{tag}</span>' for tag in self.current_model.tags)}
+                </div>
+            </div>
+        </div>
+        """
         
-        # 添加输出区
-        self.widgets['output_area'] = widgets.Output()
-        children.append(self.widgets['output_area'])
+        model_info = widgets.HTML(value=css + model_info_html)
+        widgets_list.append(model_info)
         
-        tool_widget.children = children
-        return tool_widget
+        # 遍历所有状态
+        for state in self.current_model.states:
+            state_name = state.get('name', 'Unnamed State')
+            state_desc = state.get('desc', 'No description')
+            
+            # 创建状态容器
+            state_html = f"""
+            <div class="state-section">
+                <h3>{state_name}</h3>
+                <p style="color: #666; font-style: italic;">{state_desc}</p>
+                <div class="events-container">
+            """
+            
+            # 检查该状态是否有需要用户输入的事件
+            has_input_events = False
+            for event in state.get('event', []):
+                if event.get('eventType') == 'response':
+                    has_input_events = True
+                    event_name = event.get('eventName', '')
+                    optional_text = "Required" if not event.get('optional', False) else "Optional"
+                    event_desc = event.get('eventDesc', '')
+                    
+                    state_html += f"""
+                    <div class="event-card">
+                        <div class="event-header">
+                            <span class="event-name">{event_name}</span>
+                            <span class="event-type {optional_text.lower()}">{optional_text}</span>
+                        </div>
+                        <div class="event-desc">{event_desc}</div>
+                        <div class="input-group">
+                            <input type="text" class="input-field" id="file-path-{event_name}" placeholder="No selection" readonly>
+                            <button class="select-button" id="select-{event_name}">Select</button>
+                        </div>
+                        <div class="file-chooser-container" id="chooser-{event_name}"></div>
+                    </div>
+                    """
+            
+            # 如果没有需要用户输入的事件，显示提示信息
+            if not has_input_events:
+                state_html += """
+                <div class="no-input-message">
+                    <p>此状态不需要用户输入</p>
+                </div>
+                """
+            
+            state_html += "</div></div>"
+            
+            # 创建状态widget并显示
+            state_widget = widgets.VBox([
+                widgets.HTML(value=state_html)
+            ])
+            
+            # 为每个事件创建文件选择器
+            for event in state.get('event', []):
+                if event.get('eventType') == 'response':
+                    fc = FileChooser(
+                        path='/',
+                        filename='',
+                        title='',
+                        show_hidden=False,
+                        select_default=True,
+                        use_dir_icons=True,
+                        show_only_dirs=False,
+                        layout=widgets.Layout(display='none')
+                    )
+                    
+                    # 添加文件选择回调
+                    def on_select(chooser):
+                        selected_file = chooser.selected
+                        if selected_file:
+                            display(Javascript(f"""
+                                document.getElementById('file-path-{event.get("eventName")}').value = '{selected_file}';
+                            """))
+                    
+                    fc.register_callback(on_select)
+                    
+                    # 添加Select按钮点击事件
+                    display(Javascript(f"""
+                        document.getElementById('select-{event.get("eventName")}').onclick = function() {{
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.onchange = function(e) {{
+                                const file = e.target.files[0];
+                                if (file) {{
+                                    document.getElementById('file-path-{event.get("eventName")}').value = file.name;
+                                }}
+                            }};
+                            input.click();
+                        }};
+                    """))
+                    
+                    state_widget.children += (fc,)
+            
+            widgets_list.append(state_widget)
+        
+        # 设置主输出控件的子组件
+        output_widget.children = widgets_list
+        display(output_widget)
