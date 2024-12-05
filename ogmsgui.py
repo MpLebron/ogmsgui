@@ -106,7 +106,10 @@ class ModelGUI:
         for data_name, data_info in self.current_model.data_items.items():
             if data_info['type'] == 'internal':
                 widget = FileChooser(
-                    title=f"{data_name}: {data_info['description']}"
+                    layout=widgets.Layout(
+                        width='100%',  # 设置宽度为100%
+                        margin='4px 0',
+                    )
                 )
                 self.widgets[f'param_{data_name}'] = widget
                 param_widgets.append(widget)
@@ -131,323 +134,151 @@ class ModelGUI:
             
         self.current_model = self.models[model_name]
         
-        # 定义CSS样式
-        css = """
-        <style>
-            .model-container {
-                padding: 20px;
-                background: #ffffff;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                margin-bottom: 20px;
-            }
-            
-            .model-title {
-                font-size: 24px;
-                font-weight: bold;
-                margin-bottom: 16px;
-                color: #1a202c;
-            }
-            
-            .info-section {
-                margin-bottom: 16px;
-            }
-            
-            .info-label {
-                font-weight: 500;
-                color: #4a5568;
-            }
-            
-            .info-value {
-                color: #2d3748;
-            }
-            
-            .tag {
-                display: inline-block;
-                padding: 4px 12px;
-                margin: 4px;
-                background: #f3f4f6;
-                color: #4b5563;
-                border-radius: 16px;
-                font-size: 14px;
-            }
-            
-            .state-section {
-                background: #ffffff;
-                border-radius: 8px;
-                padding: 20px;
-                margin-bottom: 20px;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            }
-            
-            .events-container {
-                margin-top: 16px;
-            }
-            
-            .event-card {
-                margin-bottom: 16px;
-            }
-            
-            .input-group {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                margin: 8px 0;
-            }
-            
-            .input-field {
-                flex: 1;
-                padding: 8px 12px;
-                border: 1px solid #e2e8f0;
-                border-radius: 4px;
-                background: #f8fafc;
-                font-size: 14px;
-                color: #4a5568;
-            }
-            
-            .select-button {
-                padding: 8px 16px;
-                background: #f1f5f9;
-                color: #4a5568;
-                border: 1px solid #e2e8f0;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 14px;
-                min-width: 80px;
-                text-align: center;
-            }
-            
-            .select-button:hover {
-                background: #e2e8f0;
-            }
-            
-            .required {
-                background: #ef4444;
-                color: white;
-                padding: 2px 8px;
-                border-radius: 12px;
-                font-size: 12px;
-            }
-            
-            .optional {
-                background: #6b7280;
-                color: white;
-                padding: 2px 8px;
-                border-radius: 12px;
-                font-size: 12px;
-            }
-            
-            .file-chooser-container {
-                margin-top: 8px;
-            }
-            
-            .no-input-message {
-                padding: 16px;
-                background: #f8fafc;
-                border: 1px dashed #e2e8f0;
-                border-radius: 6px;
-                text-align: center;
-                color: #64748b;
-                font-style: italic;
-                margin: 16px 0;
-            }
-            
-            .nodes-table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-top: 12px;
-            }
-            
-            .nodes-table th, .nodes-table td {
-                border: 1px solid #e2e8f0;
-                padding: 8px;
-                text-align: left;
-            }
-            
-            .nodes-table th {
-                background: #f8fafc;
-                font-weight: 500;
-            }
-            
-            .nodes-input {
-                width: 100%;
-                padding: 6px;
-                border: 1px solid #e2e8f0;
-                border-radius: 4px;
-            }
-        </style>
-        """
-        
-        # 创建一个输出控件来容纳所有内容
-        output_widget = widgets.VBox()
+        # 创建主容器
+        main_container = widgets.VBox()
         widgets_list = []
         
-        # 添加模型信息
-        model_info_html = f"""
-        <div class="model-container">
-            <div class="model-title">{self.current_model.name}</div>
-            
-            <div class="info-section">
-                <p><span class="info-label">Description: </span>
-                   <span class="info-value">{self.current_model.description or 'No description available'}</span></p>
-                <p><span class="info-label">Author: </span>
-                   <span class="info-value">{self.current_model.author or 'Unknown'}</span></p>
-                <div style="margin-top: 12px">
-                    <span class="info-label">Tags: </span>
-                    {' '.join(f'<span class="tag">{tag}</span>' for tag in self.current_model.tags)}
+        # 添加模型基本信息 - 使用卡片样式
+        model_info = widgets.HTML(value=f"""
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
+                <h3 style="margin-top: 0;">{self.current_model.name}</h3>
+                <p style="color: #666; margin-bottom: 16px;">{self.current_model.description}</p>
+                <div style="display: flex; gap: 24px;">
+                    <div>
+                        <span style="color: #666;">Authors' Emails: </span>
+                        <span>{self.current_model.author}</span>
+                    </div>
+                    <div>
+                        <span style="color: #666;">Tags: </span>
+                        <span>{', '.join(self.current_model.tags)}</span>
+                    </div>
                 </div>
             </div>
-        </div>
-        """
-        
-        model_info = widgets.HTML(value=css + model_info_html)
+        """)
         widgets_list.append(model_info)
         
-        # 遍历所有状态
-        for state in self.current_model.states:
-            state_name = state.get('name', 'Unnamed State')
-            state_desc = state.get('desc', 'No description')
+        # 遍历状态
+        for i, state in enumerate(self.current_model.states):
+            state_container = widgets.VBox(
+                layout=widgets.Layout(margin='0 0 8px 0')
+            )
+            state_widgets = []
             
-            # 创建状态容器
-            state_html = f"""
-            <div class="state-section">
-                <h3>{state_name}</h3>
-                <p style="color: #666; font-style: italic;">{state_desc}</p>
-                <div class="events-container">
-            """
+            # 添加状态信息
+            state_info = widgets.HTML(value=f"""
+                <div style="margin-bottom: 4px;">
+                    <h3 style="color: #1e293b; margin: 0 0 1px 0;">{state.get('name', '')}</h3>
+                    <p style="color: #64748b; margin: 0;">{state.get('desc', '')}</p>
+                </div>
+            """)
+            state_widgets.append(state_info)
             
             # 检查该状态是否有需要用户输入的事件
             has_input_events = False
             for event in state.get('event', []):
                 if event.get('eventType') == 'response':
                     has_input_events = True
+                    event_container = widgets.VBox(layout=widgets.Layout(margin='3px 0'))
+                    event_widgets = []
+                    
                     event_name = event.get('eventName', '')
                     optional_text = "Required" if not event.get('optional', False) else "Optional"
                     event_desc = event.get('eventDesc', '')
                     
-                    # 检查是否包含nodes类型的数据
+                    # 添加事件标题和描述
+                    event_header = widgets.HTML(value=f"""
+                        <div style="margin: 2px 0;">
+                            <span style="font-weight: 500;">{event_name}</span>
+                            <span style="background: {('#ef4444' if optional_text == 'Required' else '#94a3b8')}; 
+                                     color: white; 
+                                     padding: 1px 8px; 
+                                     border-radius: 12px; 
+                                     font-size: 12px; 
+                                     margin-left: 8px;">
+                                {optional_text}
+                            </span>
+                            <div style="color: #666; margin: 1px 0 2px 0;">{event_desc}</div>
+                        </div>
+                    """)
+                    event_widgets.append(event_header)
+                    
+                    # 检查是否包含nodes类的数据
                     has_nodes = False
                     nodes_data = []
                     for data_item in event.get('data', []):
                         if 'nodes' in data_item:
                             has_nodes = True
                             nodes_data = data_item['nodes']
-                            
+                    
                     if has_nodes:
                         # 创建表格形式的输入
-                        state_html += f"""
-                        <div class="event-card">
-                            <div class="event-header">
-                                <span class="event-name">{event_name}</span>
-                                <span class="event-type {optional_text.lower()}">{optional_text}</span>
-                            </div>
-                            <div class="event-desc">{event_desc}</div>
-                            <table class="nodes-table">
-                                <thead>
-                                    <tr>
-                                        <th>参数名</th>
-                                        <th>描述</th>
-                                        <th>值</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
+                        table_html = f"""
+                        <table class="nodes-table" style="width:100%; border-collapse:collapse; margin-top:4px;">
+                            <thead>
+                                <tr>
+                                    <th style="border:1px solid #e2e8f0; padding:8px; background:#f8fafc;">Parameter Name</th>
+                                    <th style="border:1px solid #e2e8f0; padding:8px; background:#f8fafc;">Description</th>
+                                    <th style="border:1px solid #e2e8f0; padding:8px; background:#f8fafc;">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
                         """
                         
                         for node in nodes_data:
-                            input_type = "text"
-                            state_html += f"""
+                            table_html += f"""
                                 <tr>
-                                    <td>{node.get('text', '')}</td>
-                                    <td>{node.get('desc', '')}</td>
-                                    <td>
-                                        <input type="{input_type}" 
-                                               class="nodes-input" 
+                                    <td style="border:1px solid #e2e8f0; padding:8px;">{node.get('text', '')}</td>
+                                    <td style="border:1px solid #e2e8f0; padding:8px;">{node.get('desc', '')}</td>
+                                    <td style="border:1px solid #e2e8f0; padding:8px;">
+                                        <input type="text" style="width:98%; padding:4px" 
                                                id="node-{event_name}-{node.get('text')}"
-                                               data-type="{node.get('dataType')}">
+                                               placeholder="Please input value">
                                     </td>
                                 </tr>
                             """
                         
-                        state_html += """
-                                </tbody>
-                            </table>
-                        </div>
-                        """
+                        table_html += "</tbody></table>"
+                        event_widgets.append(widgets.HTML(value=table_html))
                     else:
-                        # 原有的文件选择器代码
-                        state_html += f"""
-                        <div class="event-card">
-                            <div class="event-header">
-                                <span class="event-name">{event_name}</span>
-                                <span class="event-type {optional_text.lower()}">{optional_text}</span>
-                            </div>
-                            <div class="event-desc">{event_desc}</div>
-                            <div class="input-group">
-                                <input type="text" class="input-field" id="file-path-{event_name}" placeholder="No selection" readonly>
-                                <button class="select-button" id="select-{event_name}">Select</button>
-                            </div>
-                            <div class="file-chooser-container" id="chooser-{event_name}"></div>
-                        </div>
-                        """
+                        # 创建文件选择器
+                        fc = FileChooser(
+                            path='/',
+                            layout=widgets.Layout(
+                                width='100%',  # 设置宽度为100%
+                                margin='4px 0'
+                            )
+                        )
+                        event_widgets.append(fc)
+                    
+                    event_container.children = event_widgets
+                    state_widgets.append(event_container)
             
-            # 如果没有需要用户输入的事件，显示提示信息
+            # 如果没有输入事件，添加提示信息
             if not has_input_events:
-                state_html += """
-                <div class="no-input-message">
-                    <p>此状态不需要用户输入</p>
-                </div>
-                """
+                no_input_msg = widgets.HTML(value="""
+                    <div style="padding: 8px 12px; 
+                                background: #f8fafc; 
+                                border: 1px dashed #e2e8f0; 
+                                border-radius: 4px; 
+                                color: #64748b; 
+                                font-size: 14px; 
+                                margin: 4px 0;">
+                        此状态不需要用户输入
+                    </div>
+                """)
+                state_widgets.append(no_input_msg)
             
-            state_html += "</div></div>"
+            state_container.children = state_widgets
+            widgets_list.append(state_container)
             
-            # 创建状态widget并显示
-            state_widget = widgets.VBox([
-                widgets.HTML(value=state_html)
-            ])
-            
-            # 为每个事件创建文件选择器
-            for event in state.get('event', []):
-                if event.get('eventType') == 'response':
-                    fc = FileChooser(
-                        path='/',
-                        filename='',
-                        title='',
-                        show_hidden=False,
-                        select_default=True,
-                        use_dir_icons=True,
-                        show_only_dirs=False,
-                        layout=widgets.Layout(display='none')
-                    )
-                    
-                    # 添加文件选择回调
-                    def on_select(chooser):
-                        selected_file = chooser.selected
-                        if selected_file:
-                            display(Javascript(f"""
-                                document.getElementById('file-path-{event.get("eventName")}').value = '{selected_file}';
-                            """))
-                    
-                    fc.register_callback(on_select)
-                    
-                    # 添加Select按钮点击事件
-                    display(Javascript(f"""
-                        document.getElementById('select-{event.get("eventName")}').onclick = function() {{
-                            const input = document.createElement('input');
-                            input.type = 'file';
-                            input.onchange = function(e) {{
-                                const file = e.target.files[0];
-                                if (file) {{
-                                    document.getElementById('file-path-{event.get("eventName")}').value = file.name;
-                                }}
-                            }};
-                            input.click();
-                        }};
-                    """))
-                    
-                    state_widget.children += (fc,)
-            
-            widgets_list.append(state_widget)
+            if i < len(self.current_model.states) - 1:
+                divider = widgets.HTML(value="""
+                    <div style="padding: 0 16px;">
+                        <hr style="border: none; border-top: 2px solid #1e293b; margin: 12px 0;">
+                    </div>
+                """)
+                widgets_list.append(divider)
         
-        # 设置主输出控件的子组件
-        output_widget.children = widgets_list
-        display(output_widget)
+        # 设置主容器的子组件
+        main_container.children = widgets_list
+        display(main_container)
