@@ -140,10 +140,10 @@ class ModelGUI:
         
         # 添加模型基本信息 - 使用卡片样式
         model_info = widgets.HTML(value=f"""
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 10px;">
                 <h3 style="margin-top: 0;">{self.current_model.name}</h3>
-                <p style="color: #666; margin-bottom: 16px;">{self.current_model.description}</p>
-                <div style="display: flex; gap: 24px;">
+                <p style="color: #666; margin-bottom: 8px;">{self.current_model.description}</p>
+                <div style="display: flex; gap: 10px;">
                     <div>
                         <span style="color: #666;">Authors' Emails: </span>
                         <span>{self.current_model.author}</span>
@@ -166,9 +166,9 @@ class ModelGUI:
             
             # 添加状态信息
             state_info = widgets.HTML(value=f"""
-                <div style="margin-bottom: 4px;">
-                    <h3 style="color: #1e293b; margin: 0 0 1px 0;">{state.get('name', '')}</h3>
-                    <p style="color: #64748b; margin: 0;">{state.get('desc', '')}</p>
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 8px;">
+                    <h3 style="color: #1e293b; margin: 0 0 4px 0; font-size: 16px; font-weight: 600;">{state.get('name', '')}</h3>
+                    <p style="color: #64748b; margin: 0; font-size: 14px;">{state.get('desc', '')}</p>
                 </div>
             """)
             state_widgets.append(state_info)
@@ -263,7 +263,7 @@ class ModelGUI:
                                 color: #64748b; 
                                 font-size: 14px; 
                                 margin: 4px 0;">
-                        此状态不需要用户输入
+                        This state does not require user input
                     </div>
                 """)
                 state_widgets.append(no_input_msg)
