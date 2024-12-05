@@ -294,27 +294,39 @@ class ModelGUI:
             
             # 检查该状态是否有需要用户输入的事件
             has_input_events = False
+            event_widgets = []  # 用于存储每个事件的FileChooser部件
+            
             for event in state.get('event', []):
                 if event.get('eventType') == 'response':
                     has_input_events = True
                     event_name = event.get('eventName', '')
-                    optional_text = "Required" if not event.get('optional', False) else "Optional"
+                    optional_text = "必填" if not event.get('optional', False) else "选填"
                     event_desc = event.get('eventDesc', '')
                     
-                    state_html += f"""
+                    # 创建事件标题和描述
+                    event_html = f"""
                     <div class="event-card">
                         <div class="event-header">
                             <span class="event-name">{event_name}</span>
                             <span class="event-type {optional_text.lower()}">{optional_text}</span>
                         </div>
                         <div class="event-desc">{event_desc}</div>
-                        <div class="input-group">
-                            <input type="text" class="input-field" id="file-path-{event_name}" placeholder="No selection" readonly>
-                            <button class="select-button" id="select-{event_name}">Select</button>
-                        </div>
-                        <div class="file-chooser-container" id="chooser-{event_name}"></div>
                     </div>
                     """
+                    
+                    # 创建FileChooser实例
+                    fc = FileChooser(
+                        path='/',
+                        filename='',
+                        title=f'选择文件: {event_name}',
+                        show_hidden=False,
+                        select_default=True,
+                        use_dir_icons=True
+                    )
+                    event_widgets.append(widgets.HTML(value=event_html))
+                    event_widgets.append(fc)
+            
+            state_html += "</div></div>"
             
             # 如果没有需要用户输入的事件，显示提示信息
             if not has_input_events:
@@ -324,54 +336,12 @@ class ModelGUI:
                 </div>
                 """
             
-            state_html += "</div></div>"
+            # 创建状态widget并添加所有组件
+            state_widgets = [widgets.HTML(value=state_html)]
+            if event_widgets:
+                state_widgets.extend(event_widgets)
             
-            # 创建状态widget并显示
-            state_widget = widgets.VBox([
-                widgets.HTML(value=state_html)
-            ])
-            
-            # 为每个事件创建文件选择器
-            for event in state.get('event', []):
-                if event.get('eventType') == 'response':
-                    fc = FileChooser(
-                        path='/',
-                        filename='',
-                        title='',
-                        show_hidden=False,
-                        select_default=True,
-                        use_dir_icons=True,
-                        show_only_dirs=False,
-                        layout=widgets.Layout(display='none')
-                    )
-                    
-                    # 添加文件选择回调
-                    def on_select(chooser):
-                        selected_file = chooser.selected
-                        if selected_file:
-                            display(Javascript(f"""
-                                document.getElementById('file-path-{event.get("eventName")}').value = '{selected_file}';
-                            """))
-                    
-                    fc.register_callback(on_select)
-                    
-                    # 添加Select按钮点击事件
-                    display(Javascript(f"""
-                        document.getElementById('select-{event.get("eventName")}').onclick = function() {{
-                            const input = document.createElement('input');
-                            input.type = 'file';
-                            input.onchange = function(e) {{
-                                const file = e.target.files[0];
-                                if (file) {{
-                                    document.getElementById('file-path-{event.get("eventName")}').value = file.name;
-                                }}
-                            }};
-                            input.click();
-                        }};
-                    """))
-                    
-                    state_widget.children += (fc,)
-            
+            state_widget = widgets.VBox(state_widgets)
             widgets_list.append(state_widget)
         
         # 设置主输出控件的子组件
