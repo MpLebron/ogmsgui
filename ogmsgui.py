@@ -3,23 +3,24 @@ import os
 import ipywidgets as widgets
 from ipyfilechooser import FileChooser
 from IPython.display import display
-from IPython.display import Javascript
-
+import ogmsServer2.openModel as openModel
+import time
+import requests
+from io import StringIO
 # 
 class Model:
     """模型基类,用于处理模型的基本属性和操作"""
-    def __init__(self, model_data):
+    def __init__(self, model_name, model_data):
         mdl_json = model_data.get("mdlJson", {})
         mdl = mdl_json.get("mdl", {})
         
         self.id = model_data.get("_id", "")
-        self.name = mdl.get("name", "未命名模型")
+        self.name = model_name  # 使用键名作为型名称
         self.description = model_data.get("description", "")
         self.author = model_data.get("author", "")
         self.tags = model_data.get("normalTags", [])
         self.tags_en = model_data.get("normalTagsEn", [])
         
-        # 直接使用原始的states数据
         self.states = mdl.get("states", [])
 
 class ModelGUI:
@@ -29,7 +30,7 @@ class ModelGUI:
         self.current_model = None  # 当前选中的模型
         self.widgets = {}  # 存储GUI组件
         
-        # 在初始化时直接加载模型
+        # 在初��化时直接加载模型
         self._load_models()
     
     def _load_models(self):
@@ -43,10 +44,10 @@ class ModelGUI:
             with open(json_path, encoding='utf-8') as f:
                 models_data = json.load(f)
                 for model_name, model_data in models_data.items():
-                    self.models[model_name] = Model(model_data)
+                    self.models[model_name] = Model(model_name, model_data)
         except Exception as e:
             print(f"加载模型配置文件失败: {str(e)}")
-            self.models = {}  # 确保models是空字典而不是None
+            self.models = {}  # 确保models空字典而不是None
     
     def create_gui(self):
         """创建主GUI界面"""
@@ -63,7 +64,7 @@ class ModelGUI:
         # 创建模型信息显示区
         self.widgets['model_info'] = widgets.HTML()
         
-        # 创建参数输入区
+        # 创建参数入区
         self.widgets['params_area'] = widgets.VBox()
         
         # 创建运行按钮
@@ -202,7 +203,7 @@ class ModelGUI:
                     """)
                     event_widgets.append(event_header)
                     
-                    # 检查是否包含nodes类的数据
+                    # 检查是否包含nodes类数据
                     has_nodes = False
                     nodes_data = []
                     for data_item in event.get('data', []):
@@ -211,43 +212,48 @@ class ModelGUI:
                             nodes_data = data_item['nodes']
                     
                     if has_nodes:
-                        # 创建表格形式的输入
-                        table_html = f"""
-                        <table class="nodes-table" style="width:100%; border-collapse:collapse; margin-top:4px;">
-                            <thead>
-                                <tr>
-                                    <th style="border:1px solid #e2e8f0; padding:8px; background:#f8fafc;">Parameter Name</th>
-                                    <th style="border:1px solid #e2e8f0; padding:8px; background:#f8fafc;">Description</th>
-                                    <th style="border:1px solid #e2e8f0; padding:8px; background:#f8fafc;">Value</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                        """
+                        # 创建表格容器
+                        table_container = widgets.VBox()
+                        table_widgets = []
                         
+                        # 添加表头
+                        header = widgets.HTML(value="""
+                            <div style="display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 8px; padding: 8px; background: #f8fafc; border: 1px solid #e2e8f0;">
+                                <div style="font-weight: 500;">Parameter Name</div>
+                                <div style="font-weight: 500;">Description</div>
+                                <div style="font-weight: 500;">Value</div>
+                            </div>
+                        """)
+                        table_widgets.append(header)
+                        
+                        # 为每个参数创建一行
                         for node in nodes_data:
-                            table_html += f"""
-                                <tr>
-                                    <td style="border:1px solid #e2e8f0; padding:8px;">{node.get('text', '')}</td>
-                                    <td style="border:1px solid #e2e8f0; padding:8px;">{node.get('desc', '')}</td>
-                                    <td style="border:1px solid #e2e8f0; padding:8px;">
-                                        <input type="text" style="width:98%; padding:4px" 
-                                               id="node-{event_name}-{node.get('text')}"
-                                               placeholder="Please input value">
-                                    </td>
-                                </tr>
-                            """
+                            # 创建行容器
+                            row = widgets.HBox([
+                                widgets.HTML(value=f"""
+                                    <div style="padding: 8px; min-width: 150px;">{node.get('text', '')}</div>
+                                """),
+                                widgets.HTML(value=f"""
+                                    <div style="padding: 8px; min-width: 200px;">{node.get('desc', '')}</div>
+                                """),
+                                widgets.Text(
+                                    placeholder='请输入值',
+                                    layout=widgets.Layout(width='150px')
+                                )
+                            ])
+                            # 存储Text widget的引用
+                            self.widgets[f'node-{event_name}-{node.get("text")}'] = row.children[-1]
+                            table_widgets.append(row)
                         
-                        table_html += "</tbody></table>"
-                        event_widgets.append(widgets.HTML(value=table_html))
+                        table_container.children = table_widgets
+                        event_widgets.append(table_container)
                     else:
                         # 创建文件选择器
                         fc = FileChooser(
-                            path='/',
-                            layout=widgets.Layout(
-                                width='100%',  # 设置宽度为100%
-                                margin='4px 0'
-                            )
+                            path='./',
+                            layout=widgets.Layout(width='100%')
                         )
+                        self.widgets[f'file_chooser_{event_name}'] = fc
                         event_widgets.append(fc)
                     
                     event_container.children = event_widgets
@@ -279,6 +285,134 @@ class ModelGUI:
                 """)
                 widgets_list.append(divider)
         
+        # 创建输出区域
+        self.widgets['output_area'] = widgets.Output()
+        
+        # 添加运行按钮和输出区域
+        run_button = widgets.Button(
+            description='Run',
+            style=widgets.ButtonStyle(button_color='#4CAF50', text_color='white')
+        )
+        run_button.on_click(self._on_run_button_clicked)
+        
+        # 将按钮和输出区域添加到widgets_list
+        widgets_list.extend([
+            run_button,
+            self.widgets['output_area']
+        ])
+        
         # 设置主容器的子组件
         main_container.children = widgets_list
         display(main_container)
+
+    def _on_run_button_clicked(self, b):
+        """处理运行按钮点击事件"""
+        with self.widgets['output_area']:
+            self.widgets['output_area'].clear_output()
+            
+            missing_required_fields = []
+            input_files = {}
+            
+            for state in self.current_model.states:
+                state_name = state.get('name')
+                input_files[state_name] = {}
+                
+                for event in state.get('event', []):
+                    if event.get('eventType') == 'response':
+                        event_name = event.get('eventName', '')
+                        is_required = not event.get('optional', False)
+                        
+                        # 检查是否有nodes数据
+                        has_nodes = False
+                        nodes_data = []
+                        for data_item in event.get('data', []):
+                            if 'nodes' in data_item:
+                                has_nodes = True
+                                nodes_data = data_item['nodes']
+                    
+                        if has_nodes:
+                            # 创建XML格式的数据
+                            xml_lines = ['<Dataset>']
+                            for node in nodes_data:
+                                widget = self.widgets.get(f'node-{event_name}-{node.get("text")}')
+                                if widget:
+                                    value = widget.value
+                                    if value:
+                                        kernel_type = node.get('kernelType', 'string')
+                                        xml_lines.append(
+                                            f'  <XDO name="{node.get("text")}" '
+                                            f'kernelType="{kernel_type}" '
+                                            f'value="{value}" />'
+                                        )
+                                    elif is_required:
+                                        missing_required_fields.append(f"'{node.get('text')}'")
+                            xml_lines.append('</Dataset>')
+                            
+                            if len(xml_lines) > 2:  # 如果有数据
+                                xml_content = '\n'.join(xml_lines)
+                                try:
+                                    # 传入event_name作为参数
+                                    download_url = self._upload_to_server(xml_content, event_name)
+                                    # 使用下载链接替换XML内容
+                                    input_files[state_name][event_name] = download_url
+                                except Exception as e:
+                                    print(f"❌ Error: Failed to upload data - {str(e)}")
+                                    return
+                        else:
+                            # 处理文件输入
+                            file_chooser = self.widgets.get(f'file_chooser_{event_name}')
+                            if file_chooser:
+                                if file_chooser.selected:
+                                    input_files[state_name][event_name] = file_chooser.selected
+                                elif is_required:
+                                    missing_required_fields.append(f"'{event_name}'")
+            
+            if missing_required_fields:
+                print(f"❌ Error: The following required fields are missing: {', '.join(missing_required_fields)}")
+                return
+
+            try:
+                # print(input_files)
+                # 继续执行模型
+                taskServer = openModel.OGMSAccess(
+                    modelName=self.current_model.name,
+                    token="6U3O1Sy5696I5ryJFaYCYVjcIV7rhd1MKK0QGX9A7zafogi8xTdvejl6ISUP1lEs"
+                )
+                print("\nRunning model...")
+                result = taskServer.createTask(params=input_files)
+                # print(result)
+                
+            except Exception as e:
+                print(f"❌ Error: Model run failed - {str(e)}")
+
+    def _upload_to_server(self, xml_content, event_name):
+        """上传XML数据到中转服务器并获取下载链接"""
+        try:
+            # 服务器地址
+            upload_url = 'http://112.4.132.6:8083/data'
+            
+            # 使用event_name作为文件名
+            filename = f"{event_name}"
+            
+            # 创建表单数据
+            files = {
+                'datafile': (filename, StringIO(xml_content), 'application/xml')
+            }
+            data = {
+                'name': filename  # 使用相同的文件名
+            }
+            
+            # 发送POST请求
+            response = requests.post(upload_url, files=files, data=data)
+            
+            # 检查响应状态
+            if response.status_code == 200:
+                response_data = response.json()
+                # 构建下载链接
+                download_url = f"{upload_url}/{response_data['data']['id']}"
+                return download_url
+            else:
+                raise Exception(f"Server returned error status code: {response.status_code}")
+            
+        except Exception as e:
+            raise Exception(f"Failed to upload data to server: {str(e)}")
