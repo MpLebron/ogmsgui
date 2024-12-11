@@ -789,13 +789,6 @@ def Suggest_Model():
         print(f"获取模型推荐时发生错误: {str(e)}")
         return []
 
-notebook_path = None  # 初始化全局变量
-
-@register_line_magic
-def get_notebook_path(line):
-    """获取当前Notebook的路径"""
-    display(Javascript('IPython.notebook.kernel.execute("notebook_path = " + "\'"+IPython.notebook.notebook_path+"\'");'))
-
 def get_data_context():
     """获取数据仓库上下文信息"""
     try:
@@ -849,7 +842,7 @@ def get_data_context():
                     rel_path = os.path.relpath(os.path.join(root, file), notebook_dir)
                     data_files.append(f"- A {ext[1:]} file named '{file}' located at '{rel_path}'")
         
-        # 构建自然语���描述
+        # 构建自然语描述
         if not data_files:
             context_description = "No relevant data files found in the current directory."
         else:
@@ -945,23 +938,50 @@ def get_model_context():
         return "Failed to analyze model repository context due to an error."
 
 def get_modeling_history_context():
-    """获取建模历史上下文信息"""
+    """获取建模历史上下文信息，包括代码和Markdown内容"""
     try:
         # 获取IPython shell实例
         ipython = get_ipython()
         if ipython is None:
             raise RuntimeError("This function must be run in an IPython environment")
         
-        # 获取输入历史
-        history = list(ipython.history_manager.get_range(output=False))  # 获取所有历史记录
+        # 获取当前工作目录
+        current_dir = os.getcwd()
         
-        # 如果没有历史记录，返回相应描述
-        if not history:
-            return "No commands have been executed yet."
+        # 查找最新的ipynb文件
+        notebook_path = None
+        latest_time = 0
+        for root, dirs, files in os.walk(current_dir):
+            for file in files:
+                if file.endswith('.ipynb') and not file.endswith('-checkpoint.ipynb'):
+                    file_path = os.path.join(root, file)
+                    mod_time = os.path.getmtime(file_path)
+                    if mod_time > latest_time:
+                        latest_time = mod_time
+                        notebook_path = file_path
         
-        # 记录所有命令
+        # 记录所有内容
         history_desc = []
-        for session, line_number, code in history:
+        
+        # 如果找到notebook文件
+        if notebook_path:
+            try:
+                import nbformat
+                notebook = nbformat.read(notebook_path, as_version=4)
+                
+                for cell in notebook.cells:
+                    if cell.cell_type == 'code':
+                        if cell.source.strip():  # 忽略空单元格
+                            history_desc.append(f"Code Cell:\n{cell.source}")
+                    elif cell.cell_type == 'markdown':
+                        if cell.source.strip():  # 忽略空单元格
+                            history_desc.append(f"Markdown Cell:\n{cell.source}")
+            except Exception as e:
+                print(f"Warning: Could not read notebook content: {str(e)}")
+        
+        # 获取命令历史
+        code_history = list(ipython.history_manager.get_range(output=False))
+        for session, line_number, code in code_history:
             if code.strip():  # 忽略空行
                 history_desc.append(f"In [{line_number}]: {code}")
         
