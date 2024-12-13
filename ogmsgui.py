@@ -362,6 +362,7 @@ class ModelGUI:
         
         # 创建输出区域
         self.widgets['output_area'] = widgets.Output()
+        widgets_list.append(self.widgets['output_area'])  # 将输出区域添加到widgets_list
         
         # 创建按钮容器（水平布局）
         button_container = widgets.HBox(
@@ -562,6 +563,7 @@ class ModelGUI:
         
         # 创建输出区域
         self.widgets['output_area'] = widgets.Output()
+        widgets_list.append(self.widgets['output_area'])  # 将输出区域添加到widgets_list
         
         # 创建按钮容器（水平布局）
         button_container = widgets.HBox(
@@ -669,7 +671,7 @@ class ModelGUI:
                 return
 
             try:
-                # print(input_files)
+                print(input_files)
                 # 继续执行模型
                 taskServer = openModel.OGMSAccess(
                     modelName=self.current_model.name,
