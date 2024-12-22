@@ -407,7 +407,7 @@ class ModelGUI:
     def show_model(self, model_name):
         """显示指定模型的GUI界面"""
         if model_name not in self.models:
-            raise ValueError(f"模型 '{model_name}' 不存在")
+            raise ValueError(f"Model '{model_name}' does not exist")
             
         self.current_model = self.models[model_name]
         
@@ -602,7 +602,163 @@ class ModelGUI:
         # 设置主容器的子组件
         main_container.children = widgets_list
         
-        return main_container
+        # 创建水平分栏容器
+        split_container = widgets.HBox(
+            layout=widgets.Layout(
+                width='100%',
+                display='flex'
+            )
+        )
+        
+        # 创建左侧容器 (65%)
+        left_panel = widgets.VBox(
+            layout=widgets.Layout(
+                width='65%',
+                padding='10px'
+            )
+        )
+        
+        # 创建右侧容器 (35%)
+        right_panel = widgets.VBox(
+            layout=widgets.Layout(
+                width='35%',
+                padding='20px',  # 增加内边距
+                border_left='1px solid #ccc'
+            )
+        )
+        
+        # 创建搜索框
+        search_box = widgets.Text(
+            value='',  # 初始值为空
+            placeholder='请输入您的问题...',
+            description='问题:',
+            layout=widgets.Layout(
+                width='100%',  # 修改宽度为100%
+                margin='10px 0'
+            ),
+            style={'description_width': 'auto'}  # 让描述文字自适应宽度
+        )
+        
+        # 创建结果显示区域
+        result_area = widgets.Output(
+            layout=widgets.Layout(
+                width='100%',  # 修改宽度为100%
+                min_height='400px',  # 设置最小高度
+                margin='10px 0',
+                padding='10px',
+                border='1px solid #ddd',
+                overflow_y='auto'
+            )
+        )
+        
+        # 示例问答数据
+        qa_data = {
+            "参数": f"""
+{self.current_model.name} 的参数说明：
+
+1. inputBaseTif (必填)
+- 作用：提供基础地形数据
+- 格式：.tif 文件
+- 说明：用于基础地形分析
+
+2. inputPGATif (必填)
+- 作用：提供地震加速度数据
+- 格式：.tif 文件
+- 说明：用于评估地震影响强度
+
+3. inputIntensityTif (必填)
+- 作用：提供地震烈度数据
+- 格式：.tif 文件
+- 说明：用于地震影响分析
+""",
+            "原理": f"""
+{self.current_model.name} 的工作原理：
+
+1. 基本原理
+- 基于地震PGA分布特征
+- 结合地形条件分析
+- 应用概率评估模型
+
+2. 计算流程
+- 数据预处理
+- 多因素叠加分析
+- 概率计算
+- 结果可视化
+
+3. 技术特点
+- 多源数据融合
+- 概率统计分析
+- 空间分���评估
+""",
+            "使用": f"""
+{self.current_model.name} 使用指南：
+
+1. 数据准备
+- 准备基础地形文件
+- 准备PGA分布数据
+- 准备烈度分布数据
+
+2. 操作步骤
+- 选择输入文件
+- 检查数据格式
+- 运行模型
+- 获取结果
+
+3. 注意事项
+- 确保数据完整性
+- 检查坐标系统
+- 注意数据质量
+"""
+        }
+        
+        def on_search_submit(widget):
+            """处理搜索提交"""
+            query = widget.value.strip()
+            with result_area:
+                result_area.clear_output()
+                if query:
+                    found = False
+                    for key, content in qa_data.items():
+                        if key in query:
+                            print(content)
+                            found = True
+                            break
+                    if not found:
+                        print("""
+没有找到相关回答。您可以尝试以下关键词：
+- 参数：了解模型的输入参数
+- 原理：了解模型的工作原理
+- 使用：了解模型的使用方法
+                        """)
+        
+        # 绑定搜索事件
+        search_box.on_submit(on_search_submit)
+        
+        # 创建标题
+        title = widgets.HTML(
+            value='<h3 style="margin:0 0 20px 0;">模型问答助手</h3>'
+        )
+        
+        # 创建提示信息
+        hint = widgets.HTML(
+            value='<p style="color: #666; font-size: 0.9em; margin: 5px 0;">提示：可以询问"参数"、"原理"、"使用"等相关问题</p>'
+        )
+        
+        # 组装右侧面板 - 修改这部分代码
+        right_panel.children = [
+            title,
+            search_box,
+            hint,
+            result_area
+        ]
+        
+        # 将原有的main_container放入左侧面板
+        left_panel.children = [main_container]
+        
+        # 组装分栏容器
+        split_container.children = [left_panel, right_panel]
+        
+        return split_container
     
     def _on_run_button_clicked(self, b):
         """处理运行按钮点击事件"""
