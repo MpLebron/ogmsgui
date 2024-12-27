@@ -2,13 +2,24 @@ import json
 import os
 import ipywidgets as widgets
 from ipyfilechooser import FileChooser
-from IPython.display import display, Javascript
-from IPython.core.magic import register_line_magic
+from IPython.display import display
 import ogmsServer2.openModel as openModel
 import time
 import requests
 from io import StringIO
 from IPython import get_ipython
+from scripts import AcademicQueryService
+import asyncio
+from markdown import markdown
+import nest_asyncio
+from IPython.core.magic import register_line_magic, register_cell_magic
+from IPython.display import display, Markdown
+from openai import OpenAI
+from IPython.display import HTML
+
+# 在文件开头添加这行
+nest_asyncio.apply()
+
 # 
 class Model:
     """模型基类,用于处理模型的基本属性和操作"""
@@ -99,7 +110,7 @@ class ModelGUI:
             close_button  # 将关闭按钮放在左侧面板的底部
         ]
         
-        # 创建右侧模型详情面板
+        # 建右侧模型详情面板
         right_panel = widgets.VBox(layout=widgets.Layout(flex='1', margin='10px'))
         self.widgets['model_detail_area'] = right_panel
         
@@ -133,7 +144,7 @@ class ModelGUI:
         start_idx = (self.current_page - 1) * self.page_size
         end_idx = min(start_idx + self.page_size, total_models)
         
-        # 更新导航按钮和页面信息
+        # 更新导航按钮和页面息
         prev_button = widgets.Button(
             description='Previous',
             disabled=self.current_page == 1,
@@ -199,11 +210,11 @@ class ModelGUI:
         model_name = button.description
         # print(f"点击了模型: {model_name}")  # 调试信息
         
-        # 在右侧面板显示模型界面
+        # 在右侧面板显示���型界面
         self._show_model_in_panel(model_name)
 
     def _show_model_in_panel(self, model_name):
-        """在右侧面板中显示模型界面"""
+        """在侧面板中显示模型界面"""
         if model_name not in self.models:
             print(f"Error: Model '{model_name}' does not exist")
             return
@@ -312,7 +323,7 @@ class ModelGUI:
                                     <div style="padding: 8px; min-width: 200px;">{node.get('desc', '')}</div>
                                 """),
                                 widgets.Text(
-                                    placeholder='请输入值',
+                                    placeholder='Please input value',
                                     layout=widgets.Layout(width='150px')
                                 )
                             ])
@@ -513,7 +524,7 @@ class ModelGUI:
                                     <div style="padding: 8px; min-width: 200px;">{node.get('desc', '')}</div>
                                 """),
                                 widgets.Text(
-                                    placeholder='请输入值',
+                                    placeholder='Please input value',
                                     layout=widgets.Layout(width='150px')
                                 )
                             ])
@@ -622,133 +633,61 @@ class ModelGUI:
         right_panel = widgets.VBox(
             layout=widgets.Layout(
                 width='35%',
-                padding='20px',  # 增加内边距
+                padding='10px',  # 增加内边距
                 border_left='1px solid #ccc'
             )
         )
         
         # 创建搜索框
         search_box = widgets.Text(
-            value='',  # 初始值为空
-            placeholder='请输入您的问题...',
-            description='问题:',
+            placeholder='Please input your question about this model...',
+            description='Search:',
+            description_width='50px',
+            style={
+                'description_width': 'initial',
+                'font_family': 'PingFang SC, -apple-system, BlinkMacSystemFont, sans-serif'
+            },
             layout=widgets.Layout(
-                width='100%',  # 修改宽度为100%
-                margin='10px 0'
-            ),
-            style={'description_width': 'auto'}  # 让描述文字自适应宽度
+                width='100%',
+                margin='8px 0',
+                padding='10px 16px',
+                border='1px solid #d1d5db',
+                border_radius='12px', 
+                font_size='15px',
+                background_color='white',
+                transition='all 0.3s ease',
+                box_shadow='0 1px 2px rgba(0, 0, 0, 0.05)'
+            )
         )
+        # 添加悬停和焦点效果
+        search_box._dom_classes = ['hover:border-indigo-500', 'focus:ring-2', 'focus:ring-indigo-500', 'focus:border-indigo-500']
         
-        # 创建结果显示区域
+        # 创建结果显示区域，添加固定高度和滚动条
         result_area = widgets.Output(
             layout=widgets.Layout(
-                width='100%',  # 修改宽度为100%
-                min_height='400px',  # 设置最小高度
-                margin='10px 0',
-                padding='10px',
-                border='1px solid #ddd',
-                overflow_y='auto'
+                width='100%',
+                height='500px',  # 固定高度
+                # border='1px solid #ddd',
+                padding='5px',
+                overflow_y='auto'  # 添加垂直滚动条
             )
         )
         
-        # 示例问答数据
-        qa_data = {
-            "参数": f"""
-{self.current_model.name} 的参数说明：
-
-1. inputBaseTif (必填)
-- 作用：提供基础地形数据
-- 格式：.tif 文件
-- 说明：用于基础地形分析
-
-2. inputPGATif (必填)
-- 作用：提供地震加速度数据
-- 格式：.tif 文件
-- 说明：用于评估地震影响强度
-
-3. inputIntensityTif (必填)
-- 作用：提供地震烈度数据
-- 格式：.tif 文件
-- 说明：用于地震影响分析
-""",
-            "原理": f"""
-{self.current_model.name} 的工作原理：
-
-1. 基本原理
-- 基于地震PGA分布特征
-- 结合地形条件分析
-- 应用概率评估模型
-
-2. 计算流程
-- 数据预处理
-- 多因素叠加分析
-- 概率计算
-- 结果可视化
-
-3. 技术特点
-- 多源数据融合
-- 概率统计分析
-- 空间分���评估
-""",
-            "使用": f"""
-{self.current_model.name} 使用指南：
-
-1. 数据准备
-- 准备基础地形文件
-- 准备PGA分布数据
-- 准备烈度分布数据
-
-2. 操作步骤
-- 选择输入文件
-- 检查数据格式
-- 运行模型
-- 获取结果
-
-3. 注意事项
-- 确保数据完整性
-- 检查坐标系统
-- 注意数据质量
-"""
-        }
+        # 保存到实例变量中
+        self.widgets['result_area'] = result_area
         
-        def on_search_submit(widget):
-            """处理搜索提交"""
-            query = widget.value.strip()
-            with result_area:
-                result_area.clear_output()
-                if query:
-                    found = False
-                    for key, content in qa_data.items():
-                        if key in query:
-                            print(content)
-                            found = True
-                            break
-                    if not found:
-                        print("""
-没有找到相关回答。您可以尝试以下关键词：
-- 参数：了解模型的输入参数
-- 原理：了解模型的工作原理
-- 使用：了解模型的使用方法
-                        """)
-        
-        # 绑定搜索事件
-        search_box.on_submit(on_search_submit)
+        # 绑定事件处理函数
+        search_box.on_submit(self.on_search_submit)
         
         # 创建标题
         title = widgets.HTML(
-            value='<h3 style="margin:0 0 20px 0;">模型问答助手</h3>'
-        )
-        
-        # 创建提示信息
-        hint = widgets.HTML(
-            value='<p style="color: #666; font-size: 0.9em; margin: 5px 0;">提示：可以询问"参数"、"原理"、"使用"等相关问题</p>'
+            value='<h3 style="margin:0 0 2px 0;">Model QA Assistant</h3>'
         )
         
         # 组装右侧面板 - 修改这部分代码
         right_panel.children = [
             title,
             search_box,
-            hint,
             result_area
         ]
         
@@ -863,7 +802,7 @@ class ModelGUI:
                 print(f"❌ Error: Model run failed - {str(e)}")
 
     def _upload_to_server(self, xml_content, event_name):
-        """上传XML数据到中转服务器并获取下载链接"""
+        """上传XML据到中转服务器并获取下载链接"""
         try:
             # 务器地址
             upload_url = 'http://112.4.132.6:8083/data'
@@ -894,12 +833,94 @@ class ModelGUI:
         except Exception as e:
             raise Exception(f"Failed to upload data to server: {str(e)}")
 
+    async def _get_search_result(self, query: str) -> str:
+        """
+        调用学术查询服务获取结果
+        """
+        # 获取历史上下文
+        ip = get_ipython()
+        history_context = ""
+        if ip is not None:
+            history = []
+            for session, line_num, input in ip.history_manager.get_range():
+                history.append(input)
+            history_context = "\n".join(history)
+
+        # 构建建模上下文
+        modeling_context = f"""
+                            当前模型: {self.current_model.name}
+                            模型描述: {self.current_model.description}
+                            历史记录:
+                            {history_context}
+                            """
+
+        try:
+            service = AcademicQueryService()
+            full_query = f"Tell me about {self.current_model.name} model's {query}"
+
+            result = await service.get_academic_question_answer(full_query, modeling_context)
+            return result
+        except Exception:
+            return "网络异常请稍后重试"
+
+    def on_search_submit(self, widget):
+        """处理搜索提交"""
+        query = widget.value.strip()
+        with self.widgets['result_area']:
+            self.widgets['result_area'].clear_output()
+            if query:
+                # 获取当前运行的事件循环
+                loop = asyncio.get_event_loop()
+                try:
+                    result = loop.run_until_complete(self._get_search_result(query))
+                    if isinstance(result, dict):
+                        # 将答案转换为markdown格式
+                        answer_html = markdown(result['answer'], extensions=['extra'])
+                        # 包装在div中显示
+                        answer_wrapper = f"""
+                        <div style="margin:4px 0;padding:3px 4px;border:1px solid #e5e7eb;border-radius:12px;word-wrap:break-word;max-width:100%;text-align:justify;background:#ffffff;box-shadow:0 2px 4px rgba(0,0,0,0.05);font-size:14px;line-height:1.3;color:#374151;">
+                            {answer_html}
+                        </div>
+                        """
+                        display(HTML(answer_wrapper))
+                        
+                        print("Related Papers:")
+                        # 打印论文列表
+                        for paper in result['paperList']:
+                            authors = paper.get('authors', [])
+                            if len(authors) > 3:
+                                author_text = f"{authors[0]} et al."
+                            else:
+                                author_text = " · ".join(authors)
+                            
+                            # 论文标题也支持markdown
+                            title_html = markdown(paper['title'], extensions=['extra'])
+                            display_text_html = markdown(paper['display_text'], extensions=['extra'])
+                            
+                            paper_html = f"""
+    <div style="margin: 4px 0; padding: 8px 12px; background: white; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all 0.2s;">
+        <h4 style="margin: 0 0 4px 0; padding: 0; font-size: 12px; font-weight: 600; color: #111827; line-height: 1.3; text-align: justify;">{title_html}</h4>
+        <p style="margin: 0 0 4px 0; padding: 0; color: #4b5563; font-size: 11px; line-height: 1.4; text-align: justify;">{display_text_html}</p>
+        <div style="display: flex; gap: 8px; align-items: center; font-size: 10px; color: #6b7280;">
+            <span style="padding: 1px 6px; background: #f3f4f6; border-radius: 9999px;">{paper.get('year', 'N/A')}</span>
+            <span>{paper.get('citation_count', 0)} Citations</span>
+            <span>{author_text}</span>
+            <span style="color: #9ca3af;">{paper.get('journal', 'N/A')}</span>
+        </div>
+    </div>
+    """
+                            display(HTML(paper_html))
+                    else:
+                        print(result)
+                except Exception as e:
+                    print(f"发生错误: {str(e)}")
+
 class NotebookContext:
     """用于收集和处理Notebook上下文信息"""
-    def __init__(self, data_context, model_context, history_context):
-        self.data_context = data_context
-        self.model_context = model_context
-        self.history_context = history_context
+    def __init__(self):
+        self.data_context = self._get_data_context()
+        self.model_context = self._get_model_context()
+        self.history_context = self._get_modeling_history_context()
 
     def to_dict(self):
         """将上下文信息转换为字典格式"""
@@ -908,16 +929,220 @@ class NotebookContext:
             "model_context": self.model_context,
             "history_context": self.history_context
         }
+    
+    def _get_data_context(self):
+        """获取数据仓库上下文信息"""
+        try:
+            # 获取IPython shell实例
+            ipython = get_ipython()
+            if ipython is None:
+                raise RuntimeError("This function must be run in an IPython environment")
+            
+            # 获取当前工作录
+            notebook_dir = os.getcwd()
+            
+            # 定义要排除的目录和文件模式
+            exclude_dirs = {
+                '.git',
+                '__pycache__',
+                '.ipynb_checkpoints',
+                'node_modules',
+                '.idea',
+                '.vscode'
+            }
+            
+            # 定义要排除的扩展名
+            exclude_extensions = {
+                '.pyc',
+                '.pyo',
+                '.pyd',
+                '.so',
+                '.git',
+                '.DS_Store',
+                '.gitignore',
+                '.py',
+                '.c',
+                '.md',
+                '.txt'
+            }
+            
+            # 创建数据文件列表
+            data_files = []
+            
+            # 遍历目录树
+            for root, dirs, files in os.walk(notebook_dir):
+                # 过滤掉不需要的目录
+                dirs[:] = [d for d in dirs if d not in exclude_dirs]
+                
+                # 过滤并处理文件
+                for file in files:
+                    # 检查文件扩展名
+                    _, ext = os.path.splitext(file)
+                    if ext not in exclude_extensions and not file.startswith('.'):
+                        # 获取相对路径
+                        rel_path = os.path.relpath(os.path.join(root, file), notebook_dir)
+                        data_files.append(f"- A {ext[1:]} file named '{file}' located at '{rel_path}'")
+            
+            # 构建自然语描述
+            if not data_files:
+                context_description = "No relevant data files found in the current directory."
+            else:
+                context_description = "The following data files are available in the current working directory:\n"
+                context_description += "\n".join(data_files)
+                context_description += "\n\nThese files might be useful as input data for model operations."
+            
+            return context_description
+        
+        except Exception as e:
+            print(f"Error getting data context: {str(e)}")
+            return "Failed to analyze data context due to an error."
+
+    def _get_model_context(self):
+        """获取模型仓库上下文信息"""
+        try:
+            # 获取当前文件所在目录
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            # 构建JSON���件路径
+            json_path = os.path.join(current_dir, "data", "computeModel.json")
+            
+            # 取模型配置文件
+            with open(json_path, encoding='utf-8') as f:
+                models_data = json.load(f)
+            
+            # 如果没有模型数据，返回相应描述
+            if not models_data:
+                return "No models are currently available in the model repository."
+            
+            # 构建模型描述表
+            model_descriptions = ["The following models are available in the model repository:"]
+            
+            for model_name, model_data in models_data.items():
+                # 模型数据中提取信息
+                mdl_json = model_data.get("mdlJson", {})
+                mdl = mdl_json.get("mdl", {})
+                
+                description = model_data.get("description", "No description available")
+                author = model_data.get("author", "Unknown")
+                tags = model_data.get("normalTags", [])
+                states = mdl.get("states", [])
+                
+                # 构建该模型的描述
+                model_desc = [f"\n- Model: {model_name}"]
+                model_desc.append(f"  Description: {description}")
+                model_desc.append(f"  Author: {author}")
+                
+                if tags:
+                    model_desc.append(f"  Tags: {', '.join(tags)}")
+                
+                # 收集所有输入输出事件
+                all_inputs = []
+                all_outputs = []
+                
+                for state in states:
+                    state_events = state.get("event", [])
+                    all_inputs.extend([e for e in state_events if e.get("eventType") == "response"])
+                    all_outputs.extend([e for e in state_events if e.get("eventType") == "noresponse"])
+                
+                # 描述输入需求
+                if all_inputs:
+                    model_desc.append("  Input Requirements:")
+                    for event in all_inputs:
+                        event_name = event.get("eventName", "Unnamed input")
+                        event_desc = event.get("eventDesc", "No description")
+                        event_optional = "Optional" if event.get("optional", False) else "Required"
+                        
+                        model_desc.append(f"    - {event_name} ({event_optional})")
+                        model_desc.append(f"      Description: {event_desc}")
+                
+                # 描述输出数据
+                if all_outputs:
+                    model_desc.append("  Generated Outputs:")
+                    for event in all_outputs:
+                        event_name = event.get("eventName", "Unnamed output")
+                        event_desc = event.get("eventDesc", "No description")
+                        
+                        model_desc.append(f"    - {event_name}")
+                        model_desc.append(f"      Description: {event_desc}")
+                
+                # 将该模型的描述添加到总描述中
+                model_descriptions.extend(model_desc)
+            
+            # 添加总结性述
+            model_descriptions.append("\nThese models can be used for various computational tasks based on their specific purposes and requirements.")
+            model_descriptions.append("Each model has specific input requirements and generates corresponding outputs.")
+            
+            # 将所有描述组合成一个字符串
+            return "\n".join(model_descriptions)
+        
+        except Exception as e:
+            print(f"Error getting model context: {str(e)}")
+            return "Failed to analyze model repository context due to an error."
+
+    def _get_modeling_history_context(self):
+        """获取建模历史上下文信息，包括代码和Markdown内容"""
+        try:
+            # 获取IPython shell实例
+            ipython = get_ipython()
+            if ipython is None:
+                raise RuntimeError("This function must be run in an IPython environment")
+            
+            # 获取当前工作目录
+            current_dir = os.getcwd()
+            
+            # 查找最新的ipynb文件
+            notebook_path = None
+            latest_time = 0
+            for root, dirs, files in os.walk(current_dir):
+                for file in files:
+                    if file.endswith('.ipynb') and not file.endswith('-checkpoint.ipynb'):
+                        file_path = os.path.join(root, file)
+                        mod_time = os.path.getmtime(file_path)
+                        if mod_time > latest_time:
+                            latest_time = mod_time
+                            notebook_path = file_path
+            
+            # 记录所有内容
+            history_desc = []
+            
+            # 如果找到notebook文件
+            if notebook_path:
+                try:
+                    import nbformat
+                    notebook = nbformat.read(notebook_path, as_version=4)
+                    
+                    for cell in notebook.cells:
+                        if cell.cell_type == 'code':
+                            if cell.source.strip():  # 忽略空单元格
+                                history_desc.append(f"Code Cell:\n{cell.source}")
+                        elif cell.cell_type == 'markdown':
+                            if cell.source.strip():  # 忽略空单元格
+                                history_desc.append(f"Markdown Cell:\n{cell.source}")
+                except Exception as e:
+                    print(f"Warning: Could not read notebook content: {str(e)}")
+            
+            # 获取命令历史
+            code_history = list(ipython.history_manager.get_range(output=False))
+            for session, line_number, code in code_history:
+                if code.strip():  # 忽略空行
+                    history_desc.append(f"In [{line_number}]: {code}")
+            
+            # 将所有描述组合成一个字符串
+            return "\n\n".join(history_desc)
+        
+        except Exception as e:
+            print(f"Error getting modeling history: {str(e)}")
+            return "Failed to analyze modeling history due to an error."
 
 def Suggest_Model():
     """构建Notebook上下文并调用API服务进行模型推荐"""
+    notebookContextInstance = NotebookContext()
     try:
         # 获取上下文信息
-        data_context = get_data_context()
-        model_context = get_model_context()
-        history_context = get_modeling_history_context()  # 注意这里使用了新的函数名
+        data_context = notebookContextInstance.get_data_context()
+        model_context = notebookContextInstance.get_model_context()
+        history_context = notebookContextInstance.get_modeling_history_context()  # 注意这里使用了新的函数名
 
-        # 创建Notebook上下文对象
+        # 建Notebook上下文对象
         notebook_context = NotebookContext(data_context, model_context, history_context)
 
         # 发送请求到API服务
@@ -947,205 +1172,153 @@ def Suggest_Model():
         print(f"获取模型推荐时发生错误: {str(e)}")
         return []
 
-def get_data_context():
-    """获取数据仓库上下文信息"""
+
+@register_line_magic
+def ogmsChat(line):
+    """行魔法函数 - 处理单行查询"""
+    return _handle_ogmsChat(line)
+
+@register_cell_magic
+def ogmsChat(line, cell):
+    """单元格魔法函数 - 处理多行查询"""
+    query = cell if cell else line
+    return _handle_ogmsChat(query)
+    
+def _handle_ogmsChat(query):
+    # 构建上下文
+    # 获取历史上下文
+    ip = get_ipython()
+    history_context = ""
+    if ip is not None:
+        history = []
+        for session, line_num, input in ip.history_manager.get_range():
+            history.append(input)
+        history_context = "\n".join(history)
+    notebookContextInstance = NotebookContext()
+    data_context = notebookContextInstance.data_context
+    # model_context = notebookContextInstance.model_context
+    # history_context = notebookContextInstance.history_context
+    # 调用%history来获取历史上下文
+
+    # 将当前建模环境中的数据、模型、历史上下文信息添加到发送给OpenAI的指令的上下文中，描述要足够清晰，要交代好，现在是在Jupyter环境下地理建模与模拟，用户当前的环境里的数据条目及其数据目录里在data_context中，用户可以通过GUI页面调用的模型列表在model_context中，用户当前环境下和jupyter notebook里的建模历史在history_context中
+
+    # 这里是因为数据目录的字符太长了，所以只取前2000个字符，但是后面记得把这个数据目录的完整内容加到openAI_query中
+    openAI_query = f"现在是在Jupyter环境下地理建模与模拟，用户当前的环境里的数据条目及其数据目录里在" + data_context[:2000] + "中，用户可以通过GUI页面调用的模型列表在" + "Nomodel" + "中，用户当前环境下和jupyter notebook里的建模历史在" + history_context + "中。如果用户问你的是关于学术性质的知识问答的话，请你在回答完用户的问题后，加入3-5篇参考文献。如果用户是让你帮他写代码的话，请你一定要回顾用户当前的建模历史，并且记住，你要给他能基于当前历史的代码建议，而不是让他从头开始写代码。用户当前的查询是：" + query
+
+    """处理查询的核心逻辑"""
+    client = OpenAI(api_key="sk-rb7CtWXJ6AXWCiavF80eA074B3704438B7C855C3D623Bb25", base_url="https://aihubmix.com/v1")
     try:
-        # 获取IPython shell实例
-        ipython = get_ipython()
-        if ipython is None:
-            raise RuntimeError("This function must be run in an IPython environment")
+        # 调用 ChatGPT API
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "user", "content": openAI_query}
+            ],
+            temperature=0.7,
+            stream=True
+        )
         
-        # 获取当前工作录
-        notebook_dir = os.getcwd()
+        # 创建输出区域
+        from IPython.display import display, clear_output
+        output = display('', display_id=True)
         
-        # 定义要排除的目录和文件模式
-        exclude_dirs = {
-            '.git',
-            '__pycache__',
-            '.ipynb_checkpoints',
-            'node_modules',
-            '.idea',
-            '.vscode'
-        }
+        # 用于累积完整响应
+        full_response = ""
         
-        # 定义要排除的文件扩展名
-        exclude_extensions = {
-            '.pyc',
-            '.pyo',
-            '.pyd',
-            '.so',
-            '.git',
-            '.DS_Store',
-            '.gitignore',
-            '.py',
-            '.c',
-            '.md',
-            '.txt'
-        }
-        
-        # 创建数据文件列表
-        data_files = []
-        
-        # 遍历目录树
-        for root, dirs, files in os.walk(notebook_dir):
-            # 过滤掉不需要的目录
-            dirs[:] = [d for d in dirs if d not in exclude_dirs]
-            
-            # 过滤并处理文件
-            for file in files:
-                # 检查文件扩展名
-                _, ext = os.path.splitext(file)
-                if ext not in exclude_extensions and not file.startswith('.'):
-                    # 获取相对路径
-                    rel_path = os.path.relpath(os.path.join(root, file), notebook_dir)
-                    data_files.append(f"- A {ext[1:]} file named '{file}' located at '{rel_path}'")
-        
-        # 构建自然语描述
-        if not data_files:
-            context_description = "No relevant data files found in the current directory."
+        # 逐块处理流式响应
+        for chunk in response:
+            if chunk.choices[0].delta.content is not None:
+                content = chunk.choices[0].delta.content
+                full_response += content
+                # 更新显示的内容
+                output.update(Markdown(f"### ChatGPT Response\n{full_response}"))
+                    
+    except Exception as e:
+        display(Markdown(f"❌ Error: {str(e)}"))
+
+# 防止魔法函数名称保留在命名空间中
+del ogmsChat
+
+# 我想要再写一个叫ogms_taskPlan的魔法函数，这个函数的作用是���据用户输入的查询，生成针对于当前建模上下文和用户建模目的的建模任务计划，这个魔法函数对应的脚本会先根据用户的提问进行论文爬取，找到相关的论文，然后总结这些论文，从而进行任务规划
+
+@register_line_magic
+def ogms_taskPlan(line):
+    """行魔法函数 - 处理单行查询"""
+    # 获取事件循环
+    loop = asyncio.get_event_loop()
+    # 运行异步函数
+    return loop.run_until_complete(_handle_ogms_taskPlan(line))
+
+@register_cell_magic
+def ogms_taskPlan(line, cell):
+    """单元格魔法函数 - 处理多行查询"""
+    query = cell if cell else line
+    loop = asyncio.get_event_loop()
+    return loop.run_until_complete(_handle_ogms_taskPlan(query))
+
+async def _handle_ogms_taskPlan(query):
+    # 构建上下文
+    # 获取历史上下文
+    ip = get_ipython()
+    history_context = ""
+    if ip is not None:
+        history = []
+        for session, line_num, input in ip.history_manager.get_range():
+            history.append(input)
+        history_context = "\n".join(history)
+
+    # 调用scripts里的_get_academic_question_answer_list函数获取论文列表
+    service = AcademicQueryService()
+    paper_list = await service._get_academic_question_answer_list(query)
+
+    openAI_query = f"现在是在Jupyter环境下的地理建模与模拟过程，你的主要任务是为用户的建模需求提供详细的任务规划，用户当前环境下和jupyter notebook里的建模历史在" + history_context + " 用户当前的查询是：" + query + " 检索出来的与用户查询相关的论文列表是：" + str(paper_list) + " 请根据这些信息，为用户的建模需求提供详细的任务规划，并给出每个任务的详细步骤"
+
+    client = OpenAI(api_key="sk-rb7CtWXJ6AXWCiavF80eA074B3704438B7C855C3D623Bb25", base_url="https://aihubmix.com/v1")
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "user", "content": openAI_query}
+        ],
+        temperature=0.7,
+        stream=True
+    )
+
+        # 先创建两个输出区域
+    task_output = display('', display_id='task')
+    papers_output = display('', display_id='papers')
+    
+    # 用于累积完整响应
+    full_response = ""
+    
+    # 先处理论文列表
+    papers_html = ""
+    for paper in paper_list:
+        authors = paper.get('authors', [])
+        if len(authors) > 3:
+            author_text = f"{authors[0]} et al."
         else:
-            context_description = "The following data files are available in the current working directory:\n"
-            context_description += "\n".join(data_files)
-            context_description += "\n\nThese files might be useful as input data for model operations."
+            author_text = " · ".join(authors)
         
-        return context_description
+        papers_html += f"""
+    <div style="margin: 4px 0; padding: 8px 12px; background: white; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <h4 style="margin: 0 0 4px 0; padding: 0; font-size: 12px; font-weight: 600; color: #111827;">{paper['title']}</h4>
+        <p style="margin: 0 0 4px 0; padding: 0; color: #4b5563; font-size: 11px;">{paper.get('display_text', '')}</p>
+        <div style="display: flex; gap: 8px; align-items: center; font-size: 10px; color: #6b7280;">
+            <span style="padding: 1px 6px; background: #f3f4f6; border-radius: 9999px;">{paper.get('year', 'N/A')}</span>
+            <span>{paper.get('citation_count', 0)} Citations</span>
+            <span>{author_text}</span>
+            <span style="color: #9ca3af;">{paper.get('journal', 'N/A')}</span>
+        </div>
+    </div>
+    """
     
-    except Exception as e:
-        print(f"Error getting data context: {str(e)}")
-        return "Failed to analyze data context due to an error."
-
-def get_model_context():
-    """获取模型仓库上下文信息"""
-    try:
-        # 获取当前文件所在目录
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        # 构建JSON文件路径
-        json_path = os.path.join(current_dir, "data", "computeModel.json")
-        
-        # 取模型配置文件
-        with open(json_path, encoding='utf-8') as f:
-            models_data = json.load(f)
-        
-        # 如果没有模型数据，返回相应描述
-        if not models_data:
-            return "No models are currently available in the model repository."
-        
-        # 构建模型描述表
-        model_descriptions = ["The following models are available in the model repository:"]
-        
-        for model_name, model_data in models_data.items():
-            # 模型数据中提取信息
-            mdl_json = model_data.get("mdlJson", {})
-            mdl = mdl_json.get("mdl", {})
-            
-            description = model_data.get("description", "No description available")
-            author = model_data.get("author", "Unknown")
-            tags = model_data.get("normalTags", [])
-            states = mdl.get("states", [])
-            
-            # 构建该模型的描述
-            model_desc = [f"\n- Model: {model_name}"]
-            model_desc.append(f"  Description: {description}")
-            model_desc.append(f"  Author: {author}")
-            
-            if tags:
-                model_desc.append(f"  Tags: {', '.join(tags)}")
-            
-            # 收集所有的输入输出事件
-            all_inputs = []
-            all_outputs = []
-            
-            for state in states:
-                state_events = state.get("event", [])
-                all_inputs.extend([e for e in state_events if e.get("eventType") == "response"])
-                all_outputs.extend([e for e in state_events if e.get("eventType") == "noresponse"])
-            
-            # 描述输入需求
-            if all_inputs:
-                model_desc.append("  Input Requirements:")
-                for event in all_inputs:
-                    event_name = event.get("eventName", "Unnamed input")
-                    event_desc = event.get("eventDesc", "No description")
-                    event_optional = "Optional" if event.get("optional", False) else "Required"
-                    
-                    model_desc.append(f"    - {event_name} ({event_optional})")
-                    model_desc.append(f"      Description: {event_desc}")
-            
-            # 描述输出数据
-            if all_outputs:
-                model_desc.append("  Generated Outputs:")
-                for event in all_outputs:
-                    event_name = event.get("eventName", "Unnamed output")
-                    event_desc = event.get("eventDesc", "No description")
-                    
-                    model_desc.append(f"    - {event_name}")
-                    model_desc.append(f"      Description: {event_desc}")
-            
-            # 将该模型的描述添加到总描述中
-            model_descriptions.extend(model_desc)
-        
-        # 添加总结性描述
-        model_descriptions.append("\nThese models can be used for various computational tasks based on their specific purposes and requirements.")
-        model_descriptions.append("Each model has specific input requirements and generates corresponding outputs.")
-        
-        # 将所有描述组合成一个字符串
-        return "\n".join(model_descriptions)
+    # 更新论文列表显示
+    papers_output.update(HTML(f"<h3>Related Papers:</h3>{papers_html}"))
     
-    except Exception as e:
-        print(f"Error getting model context: {str(e)}")
-        return "Failed to analyze model repository context due to an error."
-
-def get_modeling_history_context():
-    """获取建模历史上下文信息，包括代码和Markdown内容"""
-    try:
-        # 获取IPython shell实例
-        ipython = get_ipython()
-        if ipython is None:
-            raise RuntimeError("This function must be run in an IPython environment")
-        
-        # 获取当前工作目录
-        current_dir = os.getcwd()
-        
-        # 查找最新的ipynb文件
-        notebook_path = None
-        latest_time = 0
-        for root, dirs, files in os.walk(current_dir):
-            for file in files:
-                if file.endswith('.ipynb') and not file.endswith('-checkpoint.ipynb'):
-                    file_path = os.path.join(root, file)
-                    mod_time = os.path.getmtime(file_path)
-                    if mod_time > latest_time:
-                        latest_time = mod_time
-                        notebook_path = file_path
-        
-        # 记录所有内容
-        history_desc = []
-        
-        # 如果找到notebook文件
-        if notebook_path:
-            try:
-                import nbformat
-                notebook = nbformat.read(notebook_path, as_version=4)
-                
-                for cell in notebook.cells:
-                    if cell.cell_type == 'code':
-                        if cell.source.strip():  # 忽略空单元格
-                            history_desc.append(f"Code Cell:\n{cell.source}")
-                    elif cell.cell_type == 'markdown':
-                        if cell.source.strip():  # 忽略空单元格
-                            history_desc.append(f"Markdown Cell:\n{cell.source}")
-            except Exception as e:
-                print(f"Warning: Could not read notebook content: {str(e)}")
-        
-        # 获取命令历史
-        code_history = list(ipython.history_manager.get_range(output=False))
-        for session, line_number, code in code_history:
-            if code.strip():  # 忽略空行
-                history_desc.append(f"In [{line_number}]: {code}")
-        
-        # 将所有描述组合成一个字符串
-        return "\n\n".join(history_desc)
-    
-    except Exception as e:
-        print(f"Error getting modeling history: {str(e)}")
-        return "Failed to analyze modeling history due to an error."
+    # 处理流式响应
+    for chunk in response:
+        if chunk.choices[0].delta.content is not None:
+            content = chunk.choices[0].delta.content
+            full_response += content
+            # 更新任务规划显示
+            task_output.update(Markdown(f"### Task Planning\n{full_response}"))
